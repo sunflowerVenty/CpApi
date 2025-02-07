@@ -37,37 +37,60 @@ namespace CpApi.Service
 
         public async Task<IActionResult> CreateNewUserAndLoginAsync(CreateNewUserAndLogin newUser)
         {
-            var user = new Users()
+            try
             {
-                Name = newUser.Name,
-                AboutMe = newUser.AboutMe,
-            };
+                var emailcheck = await _context.Logins.FirstOrDefaultAsync(a => a.Email == newUser.Email);
+                if (emailcheck == null)
+                {
+                    var user = new Users()
+                    {
+                        Name = newUser.Name,
+                        AboutMe = newUser.AboutMe,
+                    };
 
-            await _context.Users.AddAsync(user);
-            await _context.SaveChangesAsync();
+                    await _context.Users.AddAsync(user);
+                    await _context.SaveChangesAsync();
 
-            var login = new Logins()
+                    var login = new Logins()
+                    {
+                        User_id = user.id_User,
+                        Email = newUser.Email,
+                        Password = newUser.Password,
+                    };
+
+                    await _context.Logins.AddAsync(login);
+                    await _context.SaveChangesAsync();
+
+                    return new OkObjectResult(new
+                    {
+                        status = true
+                    });
+                }
+                else
+                {
+                    return new BadRequestObjectResult(new
+                    {
+                        status = false
+                    });
+                }
+            }
+            catch (Exception ex) 
             {
-                User_id = user.id_User,
-                Email = newUser.Email,
-                Password = newUser.Password,
-            };
-
-            await _context.Logins.AddAsync(login);
-            await _context.SaveChangesAsync();
-
-            return new OkObjectResult(new
-            {
-                status = true
-            });
+                return new BadRequestObjectResult(new
+                {
+                    status = false
+                });
+            }
+            
         }
 
-        public async Task<IActionResult> AuthorizationAsync(string email, string pass)
+
+        public async Task<IActionResult> AuthorizationAsync([FromBody] AuthUser authuser)
         {
-            var login = await _context.Logins.FirstOrDefaultAsync(a => a.Email == email && a.Password == pass);
+            var login = await _context.Logins.FirstOrDefaultAsync(a => a.Email == authuser.Email && a.Password == authuser.Password );
             if (login is null)
             {
-                return new NotFoundObjectResult(new { status = false, MessageContent = "Такого пользователя нет" });
+                return new UnauthorizedObjectResult(new { status = false });
             }
 
             var user = await _context.Users.FirstOrDefaultAsync(a => a.id_User == login.User_id);
@@ -76,22 +99,22 @@ namespace CpApi.Service
             {
                 var claims = new List<Claim>
                 {
-                    new(ClaimsIdentity.DefaultNameClaimType, user.Name),
-                    new(ClaimsIdentity.DefaultRoleClaimType, user.Admin ? "ADMIN" : "USER")
+                    new("id_User", Convert.ToString(user.id_User)),
+                    new("Name", user.Name),
+                    new("AboutMe", user.AboutMe),
+                    new("isAdmin", Convert.ToString(user.Admin))
                 };
                 var claimsIdentity =
                 new ClaimsIdentity(claims, "Token", ClaimsIdentity.DefaultNameClaimType,
                     ClaimsIdentity.DefaultRoleClaimType);
-                
-                // eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoi0JjQvNC40LvRjCIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IlVTRVIiLCJuYmYiOjE3MzcxNDM5MzcsImV4cCI6MTczNzE0NTczNywiaXNzIjoiQVBJU2VydmVyIiwiYXVkIjoiQmxhem9yQXBwIn0.3h7tibNkInxpCLF3BUdhZCYgybFFBN-NsJxCznkpa-I
-                
+              
                 var now = DateTime.UtcNow;
                 var jwt = new JwtSecurityToken(
                         issuer: "APIServer",
                         audience: "BlazorApp",
                         notBefore: now,
                         claims: claims,
-                        expires: now.Add(TimeSpan.FromMinutes(30)),
+                        expires: now.Add(TimeSpan.FromMinutes(10)),
                         signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.ASCII.GetBytes("UgZd07mr8o5gvtFUUUGcjT4e8q08mEuB")), SecurityAlgorithms.HmacSha256));
                 var encodedJwt = new JwtSecurityTokenHandler().WriteToken(jwt);
 
@@ -122,25 +145,32 @@ namespace CpApi.Service
             return new OkObjectResult(new { status = true });
         }
 
-        public async Task<IActionResult> EditUserAsync(Users user, string email, string pass)
+        public async Task<IActionResult> EditUserAsync([FromBody] UserInfo userInfo)
         {
-            var edituser = await _context.Users.FirstOrDefaultAsync(a => a.id_User == user.id_User);
-            if (edituser is null)
+            var checkemail = await _context.Logins.FirstOrDefaultAsync(s => s.Email == userInfo.Email && s.User_id != userInfo.id_User);
+
+            if (checkemail is null)
             {
-                return new NotFoundObjectResult(new { status = false, MessageContent = "Пользователь не найден" });
+                var edituser = await _context.Users.FirstOrDefaultAsync(a => a.id_User == userInfo.id_User);
+                if (edituser is null)
+                {
+                    return new NotFoundObjectResult(new { status = false, MessageContent = "Пользователь не найден" });
+                }
+                var login = await _context.Logins.FirstOrDefaultAsync(a => a.User_id == userInfo.id_User);
+
+                edituser.Name = userInfo.Name;
+                edituser.AboutMe = userInfo.AboutMe;
+                login.User_id = userInfo.id_User;
+                login.Email = userInfo.Email;
+                login.Password = userInfo.Password;
+
+                await _context.SaveChangesAsync();
+                return new OkObjectResult(new { status = true, edituser, login });
             }
-            var login = await _context.Logins.FirstOrDefaultAsync(a => a.User_id == user.id_User);
-
-            edituser.Name = user.Name;
-            edituser.AboutMe = user.AboutMe;
-            edituser.Admin = user.Admin;
-            login.User_id = user.id_User;
-            login.Email = email;
-            login.Password = pass;
-
-            await _context.SaveChangesAsync();
-            return new OkObjectResult(new { status = true, edituser, login });
-
+            else
+            {
+                return new BadRequestObjectResult(new { status = false });
+            }
         }
 
         public async Task<IActionResult> GetUsersAsync()
@@ -157,6 +187,11 @@ namespace CpApi.Service
                                   };
 
             return new OkObjectResult(usersWithLogins.ToList());
+        }
+
+        public Task<IActionResult> EditUserAsync(Users user, string email, string pass)
+        {
+            throw new NotImplementedException();
         }
     }
 }

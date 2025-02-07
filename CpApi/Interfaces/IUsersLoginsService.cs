@@ -8,9 +8,9 @@ namespace CpApi.Interfaces
     {
         Task<IActionResult> GetAllUsersAsync();
         Task<IActionResult> CreateNewUserAndLoginAsync(CreateNewUserAndLogin newUser);
-        Task<IActionResult> AuthorizationAsync(string email, string pass);
+        Task<IActionResult> AuthorizationAsync([FromBody] AuthUser user);
         Task<IActionResult> DeleteUserAsync(int Id);
-        Task<IActionResult> EditUserAsync(Users user, string email, string pass);
+        Task<IActionResult> EditUserAsync([FromBody] UserInfo userInfo);
         Task<IActionResult> GetUsersAsync();
 
     }

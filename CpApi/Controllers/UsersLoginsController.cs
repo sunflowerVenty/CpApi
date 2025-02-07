@@ -32,25 +32,25 @@ namespace CpApi.Controllers
             return await _userLoginService.CreateNewUserAndLoginAsync(newUser);
         }
 
-        [HttpGet]
+        [HttpPost]
         [Route("Authorization")]
-        public async Task<IActionResult> Authorization(string email, string pass)
+        public async Task<IActionResult> Authorization([FromBody] AuthUser authuser)
         {
-            return await _userLoginService.AuthorizationAsync(email, pass);
+            return await _userLoginService.AuthorizationAsync(authuser);
         }
 
         [HttpDelete]
-        [Route("DeleteUser")]
-        public async Task<IActionResult> DeleteUser(int Id)
+        [Route("DeleteUser/{Id}")]
+        public async Task<IActionResult> DeleteUer(int Id)
         {
             return await _userLoginService.DeleteUserAsync(Id);
         }
 
-        [HttpPost]
+        [HttpPut]
         [Route("EditUser")]
-        public async Task<IActionResult> EditUser(Users user, string email, string pass)
+        public async Task<IActionResult> EditUser([FromBody] UserInfo userInfo)
         {
-            return await _userLoginService.EditUserAsync(user, email, pass);
+            return await _userLoginService.EditUserAsync(userInfo);
         }
 
         [HttpGet]
