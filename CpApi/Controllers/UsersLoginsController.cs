@@ -27,7 +27,7 @@ namespace CpApi.Controllers
 
         [HttpPost]
         [Route("createNewUserAndLogin")]
-        public async Task<IActionResult> CreateNewUserAndLogin(CreateNewUserAndLogin newUser)
+        public async Task<IActionResult> CreateNewUserAndLogin([FromBody] CreateNewUserAndLogin newUser)
         {
             return await _userLoginService.CreateNewUserAndLoginAsync(newUser);
         }

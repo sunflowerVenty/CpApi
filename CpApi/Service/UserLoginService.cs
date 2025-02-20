@@ -35,55 +35,74 @@ namespace CpApi.Service
             });
         }
 
-        public async Task<IActionResult> CreateNewUserAndLoginAsync(CreateNewUserAndLogin newUser)
+        public async Task<IActionResult> CreateNewUserAndLoginAsync([FromBody] CreateNewUserAndLogin newUser)
         {
-            try
+            var emailcheck = await _context.Logins.FirstOrDefaultAsync(a => a.Email == newUser.Email);
+
+            if (emailcheck == null)
             {
-                var emailcheck = await _context.Logins.FirstOrDefaultAsync(a => a.Email == newUser.Email);
-                if (emailcheck == null)
+                var createuser = new Users()
                 {
-                    var user = new Users()
-                    {
-                        Name = newUser.Name,
-                        AboutMe = newUser.AboutMe,
-                    };
+                    Name = newUser.Name,
+                    AboutMe = newUser.AboutMe,
+                    Admin = newUser.Admin
+                };
 
-                    await _context.Users.AddAsync(user);
-                    await _context.SaveChangesAsync();
+                await _context.Users.AddAsync(createuser);
+                await _context.SaveChangesAsync();
 
-                    var login = new Logins()
-                    {
-                        User_id = user.id_User,
-                        Email = newUser.Email,
-                        Password = newUser.Password,
-                    };
+                var login = new Logins()
+                {
+                    User_id = createuser.id_User,
+                    Email = newUser.Email,
+                    Password = newUser.Password,
+                };
 
-                    await _context.Logins.AddAsync(login);
-                    await _context.SaveChangesAsync();
+                await _context.Logins.AddAsync(login);
+                await _context.SaveChangesAsync();
 
-                    return new OkObjectResult(new
-                    {
-                        status = true
-                    });
+                var log = await _context.Logins.FirstOrDefaultAsync(a => a.Email == newUser.Email && a.Password == newUser.Password);
+                if (log is null)
+                {
+                    return new UnauthorizedObjectResult(new { status = false });
                 }
+
                 else
                 {
-                    return new BadRequestObjectResult(new
+                    var user = await _context.Users.FirstOrDefaultAsync(a => a.id_User == log.User_id);
+                    if (user != null)
                     {
-                        status = false
-                    });
+                        var claims = new List<Claim>
+                        {
+                            new("id_User", Convert.ToString(user.id_User)),
+                            new("Name", user.Name),
+                            new("AboutMe", user.AboutMe),
+                            new("isAdmin", Convert.ToString(user.Admin))
+                        };
+                        var claimsIdentity =
+                        new ClaimsIdentity(claims, "Token", ClaimsIdentity.DefaultNameClaimType,
+                            ClaimsIdentity.DefaultRoleClaimType);
+
+                        var now = DateTime.UtcNow;
+                        var jwt = new JwtSecurityToken(
+                                issuer: "APIServer",
+                                audience: "BlazorApp",
+                                notBefore: now,
+                                claims: claims,
+                                expires: now.Add(TimeSpan.FromMinutes(10)),
+                                signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.ASCII.GetBytes("UgZd07mr8o5gvtFUUUGcjT4e8q08mEuB")), SecurityAlgorithms.HmacSha256));
+                        var encodedJwt = new JwtSecurityTokenHandler().WriteToken(jwt);
+
+                        return new OkObjectResult(new { status = true, token = encodedJwt });
+                    }
+                    return new UnauthorizedObjectResult(new { status = false });
                 }
             }
-            catch (Exception ex) 
+            else
             {
-                return new BadRequestObjectResult(new
-                {
-                    status = false
-                });
+                return new UnauthorizedObjectResult(new { status = false });
             }
-            
         }
-
 
         public async Task<IActionResult> AuthorizationAsync([FromBody] AuthUser authuser)
         {

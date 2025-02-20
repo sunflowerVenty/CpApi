@@ -44,7 +44,7 @@ builder.Services.AddSwaggerGen(swagger =>
 builder.Services.AddDbContext<ContextDb>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("TestDbString")), ServiceLifetime.Scoped);
 
-builder.Services.AddScoped<IUsersLoginsService, UserLoginService>(); //регистрация сервиса (то где ошибка была)
+builder.Services.AddScoped<IUsersLoginsService, UserLoginService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
