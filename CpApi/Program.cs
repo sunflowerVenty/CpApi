@@ -45,6 +45,7 @@ builder.Services.AddDbContext<ContextDb>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("TestDbString")), ServiceLifetime.Scoped);
 
 builder.Services.AddScoped<IUsersLoginsService, UserLoginService>();
+builder.Services.AddScoped<IFilmsGenresService, FilmGenreService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

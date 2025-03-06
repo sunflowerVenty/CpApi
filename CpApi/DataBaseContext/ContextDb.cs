@@ -12,5 +12,7 @@ namespace CpApi.DataBaseContext
 
         public DbSet<Users> Users { get; set; }
         public DbSet<Logins> Logins { get; set; }
+        public DbSet<Films> Films { get; set; }
+        public DbSet<Genres> Genres { get; set; }
     }
 }

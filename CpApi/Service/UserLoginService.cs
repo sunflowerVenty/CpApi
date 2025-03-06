@@ -179,6 +179,7 @@ namespace CpApi.Service
 
                 edituser.Name = userInfo.Name;
                 edituser.AboutMe = userInfo.AboutMe;
+                edituser.Admin = userInfo.isAdmin;
                 login.User_id = userInfo.id_User;
                 login.Email = userInfo.Email;
                 login.Password = userInfo.Password;
@@ -200,6 +201,7 @@ namespace CpApi.Service
                                   {
                                       user.id_User,
                                       user.Name,
+                                      user.Admin,
                                       user.AboutMe,
                                       login.Email,
                                       login.Password
