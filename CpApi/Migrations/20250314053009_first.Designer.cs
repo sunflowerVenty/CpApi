@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CpApi.Migrations
 {
     [DbContext(typeof(ContextDb))]
-    [Migration("20250303033223_DeltePhoto")]
-    partial class DeltePhoto
+    [Migration("20250314053009_first")]
+    partial class first
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -102,6 +102,45 @@ namespace CpApi.Migrations
                     b.ToTable("Logins");
                 });
 
+            modelBuilder.Entity("CpApi.Model.Messages", b =>
+                {
+                    b.Property<int>("Id_Message")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id_Message"));
+
+                    b.Property<int>("Film_Id")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ImageURL")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Recipient_Id")
+                        .HasColumnType("int");
+
+                    b.Property<int>("User_Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("dateTimeSent")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id_Message");
+
+                    b.HasIndex("Film_Id");
+
+                    b.HasIndex("Recipient_Id");
+
+                    b.HasIndex("User_Id");
+
+                    b.ToTable("Messages");
+                });
+
             modelBuilder.Entity("CpApi.Model.Users", b =>
                 {
                     b.Property<int>("id_User")
@@ -144,6 +183,33 @@ namespace CpApi.Migrations
                         .HasForeignKey("User_id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("CpApi.Model.Messages", b =>
+                {
+                    b.HasOne("CpApi.Model.Films", "Films")
+                        .WithMany()
+                        .HasForeignKey("Film_Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CpApi.Model.Users", "Recipients")
+                        .WithMany()
+                        .HasForeignKey("Recipient_Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CpApi.Model.Users", "Users")
+                        .WithMany()
+                        .HasForeignKey("User_Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Films");
+
+                    b.Navigation("Recipients");
 
                     b.Navigation("Users");
                 });

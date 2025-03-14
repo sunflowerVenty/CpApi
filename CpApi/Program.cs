@@ -46,6 +46,7 @@ builder.Services.AddDbContext<ContextDb>(options =>
 
 builder.Services.AddScoped<IUsersLoginsService, UserLoginService>();
 builder.Services.AddScoped<IFilmsGenresService, FilmGenreService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
