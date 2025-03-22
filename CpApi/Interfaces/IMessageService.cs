@@ -1,5 +1,6 @@
 ﻿using CpApi.Model;
 using CpApi.Requests;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CpApi.Interfaces
 {
@@ -7,7 +8,7 @@ namespace CpApi.Interfaces
     {
         Task<IEnumerable<Messages>> GetAllMessagesAsync();
         Task<Messages> GetMessageByIdAsync(int id);
-        Task<Messages> CreateMessageAsync(AddMessageRequest message);
+        Task<IActionResult> CreateMessageAsync([FromBody] AddMessageRequest message);
         Task<bool> UpdateMessageAsync(UpdateMessageRequest message);
         Task<bool> DeleteMessageAsync(int id);
         Task<IEnumerable<Messages>> GetMessagesByFilmIdAsync(int filmId);

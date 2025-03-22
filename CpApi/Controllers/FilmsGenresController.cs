@@ -39,7 +39,7 @@ namespace CpApi.Controllers
         }
 
         [HttpGet]
-        [Route("getFilm/{Id}")]
+        [Route("getFilm")]
         public async Task<IActionResult> GetFilm([FromQuery] int Id)
         {
             return await _filmsGenresService.GetFilmAsync(Id);

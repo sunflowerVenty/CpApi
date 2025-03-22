@@ -12,7 +12,7 @@ namespace CpApi.Controllers
     {
         private readonly IMessageService _messagesService;
 
-        public MessageController(MessageService messagesService)
+        public MessageController(IMessageService messagesService)
         {
             _messagesService = messagesService;
         }
@@ -56,7 +56,14 @@ namespace CpApi.Controllers
             }
 
             var createdMessage = await _messagesService.CreateMessageAsync(newMessage);
-            return CreatedAtAction(nameof(GetMessageById), new { id = createdMessage.Id_Message }, createdMessage);
+            if (createdMessage != null)
+            {
+                return Ok(createdMessage);
+            }
+            else
+            {
+                return BadRequest();
+            }
         }
 
         /// <summary>
@@ -102,7 +109,7 @@ namespace CpApi.Controllers
         public async Task<IActionResult> GetMessagesByFilmId(int filmId)
         {
             var messages = await _messagesService.GetMessagesByFilmIdAsync(filmId);
-            return Ok(messages);
+            return new OkObjectResult(messages);
         }
 
         /// <summary>

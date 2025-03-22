@@ -2,6 +2,8 @@
 using CpApi.Interfaces;
 using CpApi.Model;
 using CpApi.Requests;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,7 +33,7 @@ namespace CpApi.Service
         }
 
         // Создать новое сообщение
-        public async Task<Messages> CreateMessageAsync(AddMessageRequest messageRequest)
+        public async Task<IActionResult> CreateMessageAsync([FromBody] AddMessageRequest messageRequest)
         {
             var message = new Messages
             {
@@ -42,10 +44,13 @@ namespace CpApi.Service
                 ImageURL = messageRequest.ImageURL,
                 dateTimeSent = DateTime.UtcNow
             };
+            if (message != null)
+            {
+                _context.Messages.Add(message);
+                await _context.SaveChangesAsync();
 
-            _context.Messages.Add(message);
-            await _context.SaveChangesAsync();
-            return message;
+            }
+                return new OkObjectResult(message);
         }
 
         // Обновить существующее сообщение

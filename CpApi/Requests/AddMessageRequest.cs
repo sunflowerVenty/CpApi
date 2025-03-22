@@ -15,8 +15,8 @@ namespace CpApi.Requests
         [Required]
         public int User_Id { get; set; }
 
-        [Required]
-        public int Recipient_Id { get; set; }
+        
+        public int ?Recipient_Id { get; set; }
 
         public DateTime dateTimeSent { get; set; }
         public string ImageURL { get; set; }

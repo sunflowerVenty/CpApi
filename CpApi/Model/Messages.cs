@@ -23,10 +23,10 @@ namespace CpApi.Model
 
         public string ImageURL { get; set; }
 
-        [Required]
+        
         [ForeignKey("Recipients")]
-        public int Recipient_Id { get; set; }
+        public int ?Recipient_Id { get; set; }
         [DeleteBehavior(DeleteBehavior.Restrict)]
-        public Users Recipients { get; set; }
+        public Users Recipients { get; set; }   
     }
 }
