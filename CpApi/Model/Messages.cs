@@ -7,26 +7,28 @@ namespace CpApi.Model
     public class Messages
     {
         [Key]
-        public int Id_Message {  get; set; }
+        public int Id { get; set; }
 
+        [Required]
+        [ForeignKey("Sender")]
+        public int SenderId { get; set; }
+
+        [Required]
+        [ForeignKey("Receiver")]
+        public int ReceiverId { get; set; }
+
+        [Required]
         public string Message { get; set; }
-        public DateTime dateTimeSent {get; set; }
-        [Required]
-        [ForeignKey("Films")]
-        public int Film_Id {  get; set; }
-        public Films Films { get; set; }
 
         [Required]
-        [ForeignKey("Users")]
-        public int User_Id { get; set; }
-        public Users Users { get; set; }
+        public DateTime Timestamp { get; set; } = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time"));
+ 
+        public string? ImageUrl { get; set; }
 
-        public string ImageURL { get; set; }
+        [DeleteBehavior(DeleteBehavior.NoAction)]
+        public Users Sender { get; set; }
 
-        
-        [ForeignKey("Recipients")]
-        public int ?Recipient_Id { get; set; }
-        [DeleteBehavior(DeleteBehavior.Restrict)]
-        public Users Recipients { get; set; }   
+        [DeleteBehavior(DeleteBehavior.NoAction)]
+        public Users Receiver { get; set; }
     }
 }

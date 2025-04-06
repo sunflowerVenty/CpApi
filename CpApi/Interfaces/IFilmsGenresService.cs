@@ -5,11 +5,10 @@ namespace CpApi.Interfaces
 {
     public interface IFilmsGenresService
     {
-        Task<IActionResult> GetAllFilmsAsync();
-        Task<IActionResult> CreateFilmGenreAsync([FromBody] CreateFilmGenre newFilm);
-        Task<IActionResult> EditFilmAsync([FromBody] FilmInfo filmInfo);
-        Task<IActionResult> GetFilmAsync([FromQuery] int Id);
-        Task<IActionResult> DeleteFilmAsync([FromQuery] int Id);
-
+        Task<IActionResult> GetAllMovies();
+        Task<IActionResult> GetMovieById(int id);
+        Task<IActionResult> CreateMovie(CreateFilm request);
+        Task<IActionResult> UpdateMovie(int id, UpdateFilm request);
+        Task<IActionResult> DeleteMovie(int id);
     }
 }

@@ -10,46 +10,44 @@ namespace CpApi.Controllers
     [Route("api/[controller]")]
     public class FilmsGenresController : ControllerBase
     {
-        IFilmsGenresService _filmsGenresService;
+        private readonly IFilmsGenresService _movieService;
 
-        public FilmsGenresController(IFilmsGenresService filmsGenresService)
+        public FilmsGenresController(IFilmsGenresService movieService)
         {
-            _filmsGenresService = filmsGenresService;
+            _movieService = movieService;
         }
 
-        [HttpGet]
-        [Route("getAllFilms")]
-        public async Task<IActionResult> GetAllFilms()
+        [HttpGet("GetAllMovies")]
+        public async Task<IActionResult> GetMovies()
         {
-            return await _filmsGenresService.GetAllFilmsAsync();
+            return await _movieService.GetAllMovies();
         }
 
-        [HttpPost]
-        [Route("createFilm")]
-        public async Task<IActionResult> CreateFilmGenre([FromBody] CreateFilmGenre newFilm)
+        [HttpGet("GetMovie/{id}")]
+        public async Task<IActionResult> GetMovie(int id)
         {
-            return await _filmsGenresService.CreateFilmGenreAsync(newFilm);
+            return await _movieService.GetMovieById(id);
         }
 
-        [HttpPut]
-        [Route("editFilm")]
-        public async Task<IActionResult> EditFilm([FromBody] FilmInfo filmInfo)
+        [HttpPost("CreateMovie")]
+        [Authorize(Roles = "Администратор")]
+        public async Task<IActionResult> CreateMovie([FromBody] CreateFilm request)
         {
-            return await _filmsGenresService.EditFilmAsync(filmInfo);
+            return await _movieService.CreateMovie(request);
         }
 
-        [HttpGet]
-        [Route("getFilm")]
-        public async Task<IActionResult> GetFilm([FromQuery] int Id)
+        [HttpPut("UpdateMovie/{id}")]
+        [Authorize(Roles = "Администратор")]
+        public async Task<IActionResult> UpdateMovie(int id, [FromBody] UpdateFilm request)
         {
-            return await _filmsGenresService.GetFilmAsync(Id);
+            return await _movieService.UpdateMovie(id, request);
         }
 
-        [HttpDelete]
-        [Route("deleteFilm/{Id}")]
-        public async Task<IActionResult> DeleteFilm(int Id)
+        [HttpDelete("DeleteMovie/{id}")]
+        [Authorize(Roles = "Администратор")]
+        public async Task<IActionResult> DeleteMovie(int id)
         {
-            return await _filmsGenresService.DeleteFilmAsync(Id);
+            return await _movieService.DeleteMovie(id);
         }
     }
 }

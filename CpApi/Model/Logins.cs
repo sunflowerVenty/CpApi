@@ -1,16 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CpApi.Model
 {
     public class Logins
     {
         [Key]
-        public int id_Login { get; set; }
+        public int Id { get; set; }
 
         [Required]
-        [Unicode]
         public string Email { get; set; }
 
         [Required]
@@ -18,7 +16,8 @@ namespace CpApi.Model
 
         [Required]
         [ForeignKey("Users")]
-        public int User_id { get; set; }
+        public int UserId { get; set; }
+
         public Users Users { get; set; }
     }
 }

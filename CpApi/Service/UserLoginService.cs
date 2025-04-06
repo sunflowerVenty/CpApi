@@ -1,218 +1,383 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using CpApi.DataBaseContext;
+﻿using CpApi.DataBaseContext;
 using CpApi.Interfaces;
 using CpApi.Model;
 using CpApi.Requests;
-using System.Security.Claims;
-using System;
-using Microsoft.AspNetCore.Authentication.OAuth;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.Data;
+using Microsoft.AspNetCore.Mvc;
+using Azure.Messaging;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using System.Security.Principal;
+using System.Security.Claims;
 using System.Text;
-
+using System.Net.Http;
+using Azure.Core;
 namespace CpApi.Service
 {
+
     public class UserLoginService : IUsersLoginsService
     {
         private readonly ContextDb _context;
+        private readonly JwtService _jwtService;
+        private readonly ILogger<UserLoginService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public UserLoginService(ContextDb context)
+        public UserLoginService(ContextDb context, JwtService jwtService, ILogger<UserLoginService> logger, IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
+            _httpContextAccessor = httpContextAccessor;
+            _jwtService = jwtService;
+            _logger = logger;
         }
 
-        public async Task<IActionResult> GetAllUsersAsync()
-        {
-            var logins = await _context.Logins.ToListAsync();
-            var users = await _context.Users.ToListAsync();
 
+
+        public async Task<IActionResult> GetUsers()
+        {
+            try
+            {
+                var users = await _context.Users.Include(u => u.Role).Include(u => u.Logins).Select(u => new {
+                    u.Id,
+                    u.Name,
+                    u.Description,
+                    Role = u.Role.Name,
+                    Logins = u.Logins.Select(l => l.Email).ToList()
+                }).ToListAsync();
+                return new OkObjectResult(users);
+            }
+            catch
+            {
+
+                return new BadRequestObjectResult("Произошла ошибка на сервере.");
+            }
+        }
+
+
+        public async Task<IActionResult> Login([FromBody] AuthUser request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+                {
+                    _logger.LogWarning("Попытка входа с пустой почтой или паролем.");
+                    return new BadRequestObjectResult("Почта и пароль обязательны.");
+                }
+
+                var login = await _context.Logins
+                    .Include(l => l.Users)
+                    .ThenInclude(u => u.Role)
+                    .FirstOrDefaultAsync(l => l.Email == request.Email);
+
+                if (login == null)
+                {
+                    _logger.LogWarning($"Пользователь с почтой {request.Email} не найден.");
+                    return new UnauthorizedObjectResult("Неверная почта или пароль.");
+                }
+                if (login.Password != request.Password)
+                {
+                    _logger.LogWarning($"Неверный пароль для пользователя с email {request.Email}.");
+                    return new UnauthorizedObjectResult("Неверная почта или пароль.");
+                }
+                if (login.Users.Role == null)
+                {
+                    _logger.LogError($"Роль не найдена для пользователя с почтой {request.Email}.");
+                    return new UnauthorizedObjectResult("Роль не найдена.");
+                }
+                var userDto = new UserDto
+                {
+                    Id = login.Users.Id,
+                    Name = login.Users.Name,
+                    Description = login.Users.Description,
+                    Role = login.Users.Role.Name,
+                    Email = login.Email,
+                    Logins = new List<string> { login.Email }
+                };
+                var token = _jwtService.GenerateJwtToken(userDto);
+                _logger.LogInformation($"Пользователь успешно авторизован.");
+                return new OkObjectResult(new { Token = token });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ошибка при авторизации пользователя.");
+                return new StatusCodeResult(500);
+            }
+        }
+
+        public async Task<IActionResult> Register([FromBody] RegisterUser request)
+        {
+            if (_context.Logins.Any(l => l.Email == request.Email))
+            {
+                return new BadRequestObjectResult("Почта уже используется");
+            }
+            var user = new Users
+            {
+                Name = request.Name,
+                Description = request.Description,
+                RoleId = 2
+            };
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+            var login = new Logins
+            {
+                Email = request.Email,
+                Password = request.Password,
+                UserId = user.Id
+            };
+            _context.Logins.Add(login);
+            _context.SaveChanges();
+            return new OkObjectResult("Регистрация прошла успешно!");
+        }
+
+        public async Task<IActionResult> GetUserById([FromQuery] int id)
+        {
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.Logins)
+                    .Where(u => u.Id == id)
+                    .Select(u => new UserDto
+                    {
+                        Id = u.Id,
+                        Name = u.Name,
+                        Description = u.Description,
+                        Role = u.Role.Name,
+                        Logins = u.Logins.Select(l => l.Email).ToList()
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (user == null)
+                {
+                    return new NotFoundObjectResult(new { Message = "Пользователь не найден!" });
+                }
+
+                return new OkObjectResult(user);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Ошибка при получении пользователя по ID");
+                return new BadRequestObjectResult(new { Message = "Произошла ошибка на сервере." });
+            }
+        }
+
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+            {
+                return new NotFoundResult();
+            }
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
             return new OkObjectResult(new
             {
-                data = new { users = users },
-                status = true
+                status = true,
+                MessageContent = "Пользователь успешно удален!"
             });
         }
 
-        public async Task<IActionResult> CreateNewUserAndLoginAsync([FromBody] CreateNewUserAndLogin newUser)
+
+
+        public async Task<UserDto?> GetUserIdFromTokenAsync(string token)
         {
-            var emailcheck = await _context.Logins.FirstOrDefaultAsync(a => a.Email == newUser.Email);
-
-            if (emailcheck == null)
+            try
             {
-                var createuser = new Users()
+                var handler = new JwtSecurityTokenHandler();
+                var jwtToken = handler.ReadJwtToken(token);
+                var userIdClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+
+                var nameClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")?.Value;
+
+                var descriptionClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "description")?.Value;
+
+                var roleClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+
+                var emailClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
+
+                var loginsClaim = jwtToken.Claims
+                    .Where(c => c.Type == "logins")
+                    .Select(c => c.Value)
+                    .ToList();
+
+                if (int.TryParse(userIdClaim, out int userId))
                 {
-                    Name = newUser.Name,
-                    AboutMe = newUser.AboutMe,
-                    Admin = newUser.Admin
-                };
-
-                await _context.Users.AddAsync(createuser);
-                await _context.SaveChangesAsync();
-
-                var login = new Logins()
-                {
-                    User_id = createuser.id_User,
-                    Email = newUser.Email,
-                    Password = newUser.Password,
-                };
-
-                await _context.Logins.AddAsync(login);
-                await _context.SaveChangesAsync();
-
-                var log = await _context.Logins.FirstOrDefaultAsync(a => a.Email == newUser.Email && a.Password == newUser.Password);
-                if (log is null)
-                {
-                    return new UnauthorizedObjectResult(new { status = false });
+                    return new UserDto
+                    {
+                        Id = userId,
+                        Name = nameClaim ?? "Не указано",
+                        Description = descriptionClaim ?? "Не указано",
+                        Role = roleClaim ?? "Не указано",
+                        Email = emailClaim,
+                        Logins = loginsClaim
+                    };
                 }
 
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при чтении токена: {ex.Message}");
+                return null;
+            }
+        }
+        public async Task<UserDto?> GetUserFromTokenAsync(string token)
+        {
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var jwtToken = handler.ReadJwtToken(token);
+                var userIdClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+                var nameClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")?.Value;
+                var descriptionClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "description")?.Value;
+                var roleClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+                var emailClaim = jwtToken.Claims
+                    .FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
+                var loginsClaim = jwtToken.Claims
+                    .Where(c => c.Type == "logins")
+                    .Select(c => c.Value)
+                    .ToList();
+                if (int.TryParse(userIdClaim, out int userId))
+                {
+                    return new UserDto
+                    {
+                        Id = userId,
+                        Name = nameClaim ?? "Не указано",
+                        Description = descriptionClaim ?? "Не указано",
+                        Role = roleClaim ?? "Не указано",
+                        Email = emailClaim,
+                        Logins = loginsClaim
+                    };
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при чтении токена: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<IActionResult> UpdateUser(UpdateUser request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    _logger.LogWarning("Запрос на обновление пользователя пуст.");
+                    return new BadRequestObjectResult("Запрос не может быть пустым.");
+                }
+                var user = await _context.Users
+                    .Include(u => u.Logins)
+                    .FirstOrDefaultAsync(u => u.Id == request.Id);
+
+                if (user == null)
+                {
+                    _logger.LogWarning($"Пользователь не найден.");
+                    return new NotFoundObjectResult("Пользователь не найден.");
+                }
+                _logger.LogInformation($"Получены данные для обновления: Name={request.Name}, Description={request.Description}, Password={request.Password}");
+
+                user.Name = request.Name;
+                user.Description = request.Description;
+
+                var login = user.Logins.FirstOrDefault();
+
+                if (login != null)
+                {
+                    login.Password = request.Password;
+                    _context.Logins.Update(login);
+                }
                 else
                 {
-                    var user = await _context.Users.FirstOrDefaultAsync(a => a.id_User == log.User_id);
-                    if (user != null)
-                    {
-                        var claims = new List<Claim>
-                        {
-                            new("id_User", Convert.ToString(user.id_User)),
-                            new("Name", user.Name),
-                            new("AboutMe", user.AboutMe),
-                            new("isAdmin", Convert.ToString(user.Admin))
-                        };
-                        var claimsIdentity =
-                        new ClaimsIdentity(claims, "Token", ClaimsIdentity.DefaultNameClaimType,
-                            ClaimsIdentity.DefaultRoleClaimType);
-
-                        var now = DateTime.UtcNow;
-                        var jwt = new JwtSecurityToken(
-                                issuer: "APIServer",
-                                audience: "BlazorApp",
-                                notBefore: now,
-                                claims: claims,
-                                expires: now.Add(TimeSpan.FromMinutes(10)),
-                                signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.ASCII.GetBytes("UgZd07mr8o5gvtFUUUGcjT4e8q08mEuB")), SecurityAlgorithms.HmacSha256));
-                        var encodedJwt = new JwtSecurityTokenHandler().WriteToken(jwt);
-
-                        return new OkObjectResult(new { status = true, token = encodedJwt });
-                    }
-                    return new UnauthorizedObjectResult(new { status = false });
+                    _logger.LogWarning($"Логин для пользователя с id {request.Id} не найден.");
+                    return new BadRequestObjectResult("Логин не найден.");
                 }
-            }
-            else
-            {
-                return new UnauthorizedObjectResult(new { status = false });
-            }
-        }
-
-        public async Task<IActionResult> AuthorizationAsync([FromBody] AuthUser authuser)
-        {
-            var login = await _context.Logins.FirstOrDefaultAsync(a => a.Email == authuser.Email && a.Password == authuser.Password );
-            if (login is null)
-            {
-                return new UnauthorizedObjectResult(new { status = false });
-            }
-
-            var user = await _context.Users.FirstOrDefaultAsync(a => a.id_User == login.User_id);
-
-            if (user != null)
-            {
-                var claims = new List<Claim>
-                {
-                    new("id_User", Convert.ToString(user.id_User)),
-                    new("Name", user.Name),
-                    new("AboutMe", user.AboutMe),
-                    new("isAdmin", Convert.ToString(user.Admin))
-                };
-                var claimsIdentity =
-                new ClaimsIdentity(claims, "Token", ClaimsIdentity.DefaultNameClaimType,
-                    ClaimsIdentity.DefaultRoleClaimType);
-              
-                var now = DateTime.UtcNow;
-                var jwt = new JwtSecurityToken(
-                        issuer: "APIServer",
-                        audience: "BlazorApp",
-                        notBefore: now,
-                        claims: claims,
-                        expires: now.Add(TimeSpan.FromMinutes(10)),
-                        signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.ASCII.GetBytes("UgZd07mr8o5gvtFUUUGcjT4e8q08mEuB")), SecurityAlgorithms.HmacSha256));
-                var encodedJwt = new JwtSecurityTokenHandler().WriteToken(jwt);
-
-                return new OkObjectResult(new { status = true, token = encodedJwt });
-            }
-
-            return new BadRequestObjectResult(new { status = false });
-        }
-
-        public async Task<IActionResult> DeleteUserAsync(int Id)
-        {
-            var user = await _context.Users.FirstOrDefaultAsync(a => a.id_User == Id);
-            var login = await _context.Logins.FirstOrDefaultAsync(a => a.User_id == Id);
-
-            if (user is null)
-            {
-                return new NotFoundObjectResult(new { status = false, MessageContent = "Пользователь не найден" });
-            }
-
-            try 
-            {
-                _context.Remove(login);
-                _context.Remove(user);
-            }
-            catch { return new NotFoundObjectResult(new { status = false, MessageContent = "Логин пользователя не найден" }); }
-            
-            await _context.SaveChangesAsync();
-            return new OkObjectResult(new { status = true });
-        }
-
-        public async Task<IActionResult> EditUserAsync([FromBody] UserInfo userInfo)
-        {
-            var checkemail = await _context.Logins.FirstOrDefaultAsync(s => s.Email == userInfo.Email && s.User_id != userInfo.id_User);
-
-            if (checkemail is null)
-            {
-                var edituser = await _context.Users.FirstOrDefaultAsync(a => a.id_User == userInfo.id_User);
-                if (edituser is null)
-                {
-                    return new NotFoundObjectResult(new { status = false, MessageContent = "Пользователь не найден" });
-                }
-                var login = await _context.Logins.FirstOrDefaultAsync(a => a.User_id == userInfo.id_User);
-
-                edituser.Name = userInfo.Name;
-                edituser.AboutMe = userInfo.AboutMe;
-                edituser.Admin = userInfo.isAdmin;
-                login.User_id = userInfo.id_User;
-                login.Email = userInfo.Email;
-                login.Password = userInfo.Password;
-
+                _context.Users.Update(user);
                 await _context.SaveChangesAsync();
-                return new OkObjectResult(new { status = true, edituser, login });
+                _logger.LogInformation($"Данные пользователя с id {request.Id} успешно обновлены.");
+                return new OkObjectResult("Данные пользователя успешно обновлены.");
             }
-            else
+            catch (Exception ex)
             {
-                return new BadRequestObjectResult(new { status = false });
+                _logger.LogError(ex, $"Ошибка при обновлении данных пользователя с id {request.Id}.");
+                return new BadRequestObjectResult("Произошла внутренняя ошибка сервера.");
             }
         }
 
-        public async Task<IActionResult> GetUsersAsync()
+        public async Task<IActionResult> ChangeUserRole(ChangeRoleAndDeleteRequest request)
         {
-            var usersWithLogins = from user in _context.Users
-                                  join login in _context.Logins on user.id_User equals login.User_id
-                                  select new
-                                  {
-                                      user.id_User,
-                                      user.Name,
-                                      user.Admin,
-                                      user.AboutMe,
-                                      login.Email,
-                                      login.Password
-                                  };
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Id == request.UserId);
 
-            return new OkObjectResult(usersWithLogins.ToList());
+                if (user == null)
+                {
+                    return new NotFoundObjectResult(new { Message = "Пользователь не найден" });
+                }
+
+                var adminRole = await _context.Role.FirstOrDefaultAsync(r => r.Name == "Администратор");
+                if (adminRole == null)
+                {
+                    return new BadRequestObjectResult(new { Message = "Роль 'Администратор' не найдена" });
+                }
+                user.Role = adminRole;
+                await _context.SaveChangesAsync();
+
+                return new OkObjectResult(new { Message = "Роль пользователя успешно изменена" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при изменении роли пользователя");
+                return new BadRequestObjectResult(new { Message = "Произошла ошибка на сервере." });
+            }
         }
 
-        public Task<IActionResult> EditUserAsync(Users user, string email, string pass)
+        public async Task<IActionResult> DeleteUser(ChangeRoleAndDeleteRequest request)
         {
-            throw new NotImplementedException();
+            try
+            {
+                var user = await _context.Users.FindAsync(request.UserId);
+                if (user == null)
+                {
+                    return new NotFoundObjectResult(new { Message = "Пользователь не найден" });
+                }
+
+                _context.Users.Remove(user);
+                await _context.SaveChangesAsync();
+
+                return new OkObjectResult(new { Message = "Пользователь успешно удален" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при удалении пользователя");
+                return new BadRequestObjectResult(new { Message = "Произошла ошибка на сервере." });
+            }
+        }
+
+        public class ChangeRoleAndDeleteRequest
+        {
+            public int UserId { get; set; }
+        }
+        public class UserDto
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public string Description { get; set; }
+            public string Role { get; set; }
+            public string? Email { get; set; }
+            public List<string>? Logins { get; set; }
         }
     }
 }

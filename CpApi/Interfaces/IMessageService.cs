@@ -6,13 +6,13 @@ namespace CpApi.Interfaces
 {
     public interface IMessageService
     {
-        Task<IEnumerable<Messages>> GetAllMessagesAsync();
-        Task<Messages> GetMessageByIdAsync(int id);
-        Task<IActionResult> CreateMessageAsync([FromBody] AddMessageRequest message);
-        Task<bool> UpdateMessageAsync(UpdateMessageRequest message);
-        Task<bool> DeleteMessageAsync(int id);
-        Task<IEnumerable<Messages>> GetMessagesByFilmIdAsync(int filmId);
-        Task<IEnumerable<Messages>> GetChatMessagesAsync(int userId, int recipientId);
-        Task<IEnumerable<Messages>> GetLatestMessagesForUserAsync(int userId);
+        Task<IActionResult> GetMessagesForMovieAsync(int movieId);
+        Task<IActionResult> GetPrivateMessagesAsync(int userId, int recipientId);
+        Task<IActionResult> PostMessageAsync([FromBody] MessageRequest messageDto);
+        Task<IActionResult> EditMessageAsync(int id, EditMessageRequest editRequest);
+        Task<IActionResult> DeleteMessageAsync(int id);
+        Task<IActionResult> UploadImageAsync(IFormFile file);
+        Task<IActionResult> GetUserDialogsAsync(int userId);
+        Task<IActionResult> SendPrivateMessageAsync(int senderId, int recipientId, string message, string imageUrl = null);
     }
 }

@@ -1,8 +1,11 @@
-﻿using CpApi.Interfaces;
+﻿using CpApi.DataBaseContext;
+using CpApi.Interfaces;
 using CpApi.Requests;
 using CpApi.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CpApi.Controllers
 {
@@ -10,128 +13,146 @@ namespace CpApi.Controllers
     [Route("api/[controller]")]
     public class MessageController : Controller
     {
-        private readonly IMessageService _messagesService;
+        private readonly ContextDb _context;
 
-        public MessageController(IMessageService messagesService)
+        public MessageController(ContextDb context)
         {
-            _messagesService = messagesService;
+            _context = context;
         }
 
-        /// <summary>
-        /// Получить все сообщения
-        /// </summary>
-        [HttpGet]
-        [Route("GetAllMessages")]
-        public async Task<IActionResult> GetAllMessages()
+        [HttpGet("getMessages/{userId}")]
+        public async Task<List<UserMessageDto>> GetMessages(int userId)
         {
-            var messages = await _messagesService.GetAllMessagesAsync();
-            return Ok(messages);
-        }
-
-        /// <summary>
-        /// Получить сообщение по ID
-        /// </summary>
-        [HttpGet]
-        [Route("GetMessageById/{id}")]
-        public async Task<IActionResult> GetMessageById(int id)
-        {
-            var message = await _messagesService.GetMessageByIdAsync(id);
-            if (message == null)
+            var userPairs = await _context.Messages
+            .Where(m => m.SenderId == userId || m.ReceiverId == userId)
+            .Select(m => new
             {
-                return NotFound($"Сообщение с ID {id} не найдено.");
-            }
-            return Ok(message);
+                User1Id = m.SenderId < m.ReceiverId ? m.SenderId : m.ReceiverId,
+                User2Id = m.SenderId < m.ReceiverId ? m.ReceiverId : m.SenderId
+            })
+            .Distinct()
+            .ToListAsync();
+
+            var userIds = userPairs.Select(up => new { up.User1Id, up.User2Id }).ToList();
+
+            var users = await _context.Users
+                .Where(u => userIds.Select(x => x.User1Id).Contains(u.Id) || userIds.Select(x => x.User2Id).Contains(u.Id))
+                .ToListAsync();
+
+            var result = userPairs.Select(up => new UserMessageDto
+            {
+                SenderId = up.User1Id,
+                ReceiverId = up.User2Id,
+                SenderName = users.FirstOrDefault(u => u.Id == up.User1Id)?.Name,
+                ReceiverName = users.FirstOrDefault(u => u.Id == up.User2Id)?.Name
+            }).ToList();
+
+            return result;
         }
 
-        /// <summary>
-        /// Создать новое сообщение
-        /// </summary>
-        [HttpPost]
-        [Route("CreateMessage")]
-        public async Task<IActionResult> CreateMessage([FromBody] AddMessageRequest newMessage)
+        [HttpGet("getMessagesWithUser/{userId}/{senderId}")]
+        public async Task<List<MessagesDto>> getMessagesWithUser(int userId, int senderId)
         {
-            if (!ModelState.IsValid)
+            var messages = await _context.Messages
+            .Where(m => (m.SenderId == userId && m.ReceiverId == senderId) ||
+                         (m.SenderId == senderId && m.ReceiverId == userId))
+            .OrderBy(m => m.Timestamp)
+            .Select(m => new MessagesDto
             {
-                return BadRequest(ModelState);
-            }
+                SenderId = m.SenderId,
+                ReceiverId = m.ReceiverId,
+                Message = m.Message,
+                Timestamp = m.Timestamp,
+                SenderName = _context.Users.FirstOrDefault(u => u.Id == m.SenderId).Name,
+                ReceiverName = _context.Users.FirstOrDefault(u => u.Id == m.ReceiverId).Name
+            })
+            .ToListAsync();
 
-            var createdMessage = await _messagesService.CreateMessageAsync(newMessage);
-            if (createdMessage != null)
-            {
-                return Ok(createdMessage);
-            }
-            else
-            {
-                return BadRequest();
-            }
+            return messages;
         }
 
-        /// <summary>
-        /// Обновить существующее сообщение
-        /// </summary>
-        [HttpPut]
-        [Route("UpdateMessage")]
-        public async Task<IActionResult> UpdateMessage([FromBody] UpdateMessageRequest updatedMessage)
+        [HttpGet("getMessagesFilms/{id:int}")]
+        public async Task<List<MessagesFilmDto>> GetMessagesFilms()
         {
-            if (!ModelState.IsValid)
+            var messages = await _context.ChatFilm
+            .Select(m => new
             {
-                return BadRequest(ModelState);
+                m.MovieId,
+                m.SenderId,
+                m.Message,
+                FilmName = m.Movie.Name,
+                SenderName = m.Users.Name,
+                Timestamp = m.Timestamp
+            })
+            .ToListAsync();
+
+            var result = messages.Select(m => new MessagesFilmDto
+            {
+                MovieId = m.MovieId,
+                SenderId = m.SenderId,
+                Message = m.Message,
+                Title = m.FilmName,
+                SenderName = m.SenderName,
+                Timestamp = m.Timestamp
+            }).ToList();
+
+            return result;
+        }
+
+        [HttpPost("uploadImage")]
+        public async Task<IActionResult> UploadImage(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("Файл не выбран.");
             }
 
-            var success = await _messagesService.UpdateMessageAsync(updatedMessage);
-            if (!success)
+            var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            if (!Directory.Exists(uploadsFolder))
             {
-                return NotFound($"Сообщение с ID {updatedMessage.Id_Message} не найдено.");
+                Directory.CreateDirectory(uploadsFolder);
             }
-            return NoContent();
-        }
 
-        /// <summary>
-        /// Удалить сообщение по ID
-        /// </summary>
-        [HttpDelete]
-        [Route("DeleteMessage/{id}")]
-        public async Task<IActionResult> DeleteMessage(int id)
-        {
-            var success = await _messagesService.DeleteMessageAsync(id);
-            if (!success)
+            var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+            var filePath = Path.Combine(uploadsFolder, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
             {
-                return NotFound($"Сообщение с ID {id} не найдено.");
+                await file.CopyToAsync(stream);
             }
-            return NoContent();
+
+            var imageUrl = $"/uploads/{fileName}";
+            return Ok(new { imageUrl });
         }
 
-        /// <summary>
-        /// Получить все сообщения для конкретного фильма
-        /// </summary>
-        [HttpGet]
-        [Route("GetMessagesByFilmId/{filmId}")]
-        public async Task<IActionResult> GetMessagesByFilmId(int filmId)
+        public class UserMessageDto
         {
-            var messages = await _messagesService.GetMessagesByFilmIdAsync(filmId);
-            return new OkObjectResult(messages);
+            public int SenderId { get; set; }
+            public string SenderName { get; set; }
+            public int ReceiverId { get; set; }
+            public string ReceiverName { get; set; }
         }
 
-        /// <summary>
-        /// Получить все сообщения между двумя пользователями (чат)
-        /// </summary>
-        [HttpGet]
-        [Route("GetChatMessages")]
-        public async Task<IActionResult> GetChatMessages([FromQuery] int userId, [FromQuery] int recipientId)
+        public class MessagesDto
         {
-            var messages = await _messagesService.GetChatMessagesAsync(userId, recipientId);
-            return Ok(messages);
+            public int SenderId { get; set; }
+            public string SenderName { get; set; }
+            public int ReceiverId { get; set; }
+            public string ReceiverName { get; set; }
+
+            public string Message { get; set; }
+
+            public DateTime Timestamp { get; set; }
         }
 
-        /// <summary>
-        /// Получить последние сообщения из всех чатов пользователя
-        /// </summary>
-        [HttpGet]
-        [Route("GetLatestMessagesForUser/{userId}")]
-        public async Task<IActionResult> GetLatestMessagesForUser(int userId)
+        public class MessagesFilmDto
         {
-            var messages = await _messagesService.GetLatestMessagesForUserAsync(userId);
-            return Ok(messages);
+            public int? MovieId { get; set; }
+            public int SenderId { get; set; }
+            public string SenderName { get; set; }
+            public string? Title { get; set; }
+            public string Message { get; set; }
+            public DateTime Timestamp { get; set; }
         }
     }
 }
