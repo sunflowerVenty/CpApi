@@ -30,21 +30,21 @@ namespace CpApi.Controllers
         }
 
         [HttpPost("CreateMovie")]
-        [Authorize(Roles = "Администратор")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateMovie([FromBody] CreateFilm request)
         {
             return await _movieService.CreateMovie(request);
         }
 
         [HttpPut("UpdateMovie/{id}")]
-        [Authorize(Roles = "Администратор")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateMovie(int id, [FromBody] UpdateFilm request)
         {
             return await _movieService.UpdateMovie(id, request);
         }
 
         [HttpDelete("DeleteMovie/{id}")]
-        [Authorize(Roles = "Администратор")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteMovie(int id)
         {
             return await _movieService.DeleteMovie(id);

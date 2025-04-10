@@ -29,9 +29,11 @@ namespace CpApi.Hubs
                         SenderId = idUser,
                         ReceiverId = idReceiver,
                         Message = message,
-                        ImageUrl = imageUrl
+                        ImageUrl = imageUrl,
+                        Timestamp = DateTime.Now
 
                     });
+                    Console.WriteLine("Send");
                     await _context.SaveChangesAsync();
                     Console.WriteLine("Good sending");
                 }
@@ -45,9 +47,12 @@ namespace CpApi.Hubs
         public async Task SendMessageFilm(string message, int senderId, int? idFilm)
         {
             var user = await _context.Users.FindAsync(senderId);
-            string Title = null;
-            if (idFilm != null) Title = (await _context.Movies.FindAsync(idFilm)).Name;
 
+            await Clients.Others.SendAsync("ReceiveMessageFilm",
+                message,
+                senderId,
+                idFilm,
+                user.Name);
             _context.ChatFilm.Add(new ChatFilm
             {
                 SenderId = senderId,
@@ -56,7 +61,6 @@ namespace CpApi.Hubs
             });
             await _context.SaveChangesAsync();
 
-            await Clients.All.SendAsync("ReceiveMessageFilm", message, senderId, user.Name, Title);
         }
 
         public async Task RegisterUser(int userId)

@@ -57,7 +57,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Movie Ayaz API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "MovieAPI", Version = "v1" });
 
     // Настройка авторизации для Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
